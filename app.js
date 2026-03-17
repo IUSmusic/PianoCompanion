@@ -1,10 +1,13 @@
 (() => {
   const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const BLACK_PCS = new Set([1, 3, 6, 8, 10]);
-  const KEYBOARD_START = 36; // C2
-  const KEYBOARD_END = 96;   // C7
-  const PIANO_WIDTH = 1240;
-  const PRESET_CHORDS = [
+  const KEYBOARD_START = 21;  // A0
+  const KEYBOARD_END = 108;   // C8
+  const PIANO_WIDTH = 2520;
+  const DEFAULT_PREVIEW_MS = 1200;
+  const ROOT_OCTAVE = 4;
+
+  const CHORDS = [
     ["maj", "Major", [0, 4, 7]],
     ["min", "Minor", [0, 3, 7]],
     ["dim", "Diminished", [0, 3, 6]],
@@ -31,79 +34,125 @@
 
   const state = {
     midiAccess: null,
-    midiInputs: [],
     heldKeys: new Set(),
-    lastNote: null,
-    lastVelocity: 0,
-    selectedChordId: null,
+    selectedRootPc: null,
+    selectedRootMidi: null,
+    selectedChordId: "maj",
     previewChordId: null,
-    previewTimeout: null,
-    isRecording: false,
-    recordingStart: 0,
-    recordedEvents: [],
-    volume: 0.6,
-    previewMs: 1200,
+    previewTimer: null,
     audioContext: null,
     masterGain: null,
     voices: new Map(),
+    volume: 0.65,
+    previewMs: DEFAULT_PREVIEW_MS,
+    lastPlayedNote: null,
+    lastVelocity: 0,
+    midiInputNames: [],
+    isRecording: false,
+    recordingStart: 0,
+    recordedEvents: [],
   };
 
   const els = {
-    midiStatus: document.getElementById("midiStatus"),
     browserStatus: document.getElementById("browserStatus"),
-    recordingBadge: document.getElementById("recordingBadge"),
-    lastNote: document.getElementById("lastNote"),
-    lastMidi: document.getElementById("lastMidi"),
-    lastVelocity: document.getElementById("lastVelocity"),
-    selectedChordLabel: document.getElementById("selectedChordLabel"),
-    inputName: document.getElementById("inputName"),
-    eventCount: document.getElementById("eventCount"),
+    midiStatus: document.getElementById("midiStatus"),
+    rootValue: document.getElementById("rootValue"),
+    rootHelp: document.getElementById("rootHelp"),
+    lastNoteValue: document.getElementById("lastNoteValue"),
+    lastMidiValue: document.getElementById("lastMidiValue"),
+    selectedChordValue: document.getElementById("selectedChordValue"),
+    selectedChordNotes: document.getElementById("selectedChordNotes"),
+    recordingValue: document.getElementById("recordingValue"),
+    eventCountValue: document.getElementById("eventCountValue"),
     volumeSlider: document.getElementById("volumeSlider"),
+    volumeValue: document.getElementById("volumeValue"),
     previewMsSlider: document.getElementById("previewMsSlider"),
+    previewMsValue: document.getElementById("previewMsValue"),
+    rootRow: document.getElementById("rootRow"),
+    chordGrid: document.getElementById("chordGrid"),
     recordBtn: document.getElementById("recordBtn"),
     stopBtn: document.getElementById("stopBtn"),
     saveMidiBtn: document.getElementById("saveMidiBtn"),
     saveWavBtn: document.getElementById("saveWavBtn"),
-    chordGrid: document.getElementById("chordGrid"),
     piano: document.getElementById("piano"),
-    noteSummary: document.getElementById("noteSummary"),
+    pianoSummary: document.getElementById("pianoSummary"),
+    pressedNotesText: document.getElementById("pressedNotesText"),
+    chordNotesText: document.getElementById("chordNotesText"),
+    midiDeviceText: document.getElementById("midiDeviceText"),
   };
 
   function isBlackKey(midi) {
     return BLACK_PCS.has(((midi % 12) + 12) % 12);
   }
 
+  function pitchClass(midi) {
+    return ((midi % 12) + 12) % 12;
+  }
+
   function noteNameFromMidi(midi) {
-    const pc = ((midi % 12) + 12) % 12;
+    const pc = pitchClass(midi);
     const octave = Math.floor(midi / 12) - 1;
     return `${NOTE_NAMES[pc]}${octave}`;
   }
 
-  function pitchClassName(midi) {
-    return NOTE_NAMES[((midi % 12) + 12) % 12];
+  function pcName(pc) {
+    return NOTE_NAMES[((pc % 12) + 12) % 12];
   }
 
   function midiToFreq(midi) {
     return 440 * Math.pow(2, (midi - 69) / 12);
   }
 
+  function rootPcToMidi(pc, octave = ROOT_OCTAVE) {
+    return 12 * (octave + 1) + pc;
+  }
+
   function clampMidi(midi) {
     return Math.max(KEYBOARD_START, Math.min(KEYBOARD_END, midi));
   }
 
-  function getActiveChord() {
+  function getSelectedChord() {
     const id = state.previewChordId || state.selectedChordId;
-    return PRESET_CHORDS.find((chord) => chord.id === id) || null;
+    return CHORDS.find((chord) => chord.id === id) || null;
+  }
+
+  function getRootMidiForDisplay() {
+    if (state.selectedRootMidi != null) return state.selectedRootMidi;
+    if (state.selectedRootPc != null) return rootPcToMidi(state.selectedRootPc);
+    return null;
+  }
+
+  function setRootFromMidi(midi) {
+    state.selectedRootMidi = midi;
+    state.selectedRootPc = pitchClass(midi);
+  }
+
+  function setRootFromPitchClass(pc) {
+    state.selectedRootPc = pc;
+    const current = getRootMidiForDisplay();
+    const base = rootPcToMidi(pc);
+    if (current == null) {
+      state.selectedRootMidi = base;
+      return;
+    }
+    const targetOctave = Math.floor(current / 12) - 1;
+    let candidate = rootPcToMidi(pc, targetOctave);
+    while (candidate < KEYBOARD_START) candidate += 12;
+    while (candidate > KEYBOARD_END) candidate -= 12;
+    state.selectedRootMidi = candidate;
   }
 
   function getChordNotes(rootMidi, chord) {
-    return chord.intervals.map((interval) => clampMidi(rootMidi + interval));
+    const raw = chord.intervals.map((interval) => rootMidi + interval).filter((m) => m >= KEYBOARD_START && m <= KEYBOARD_END);
+    if (!raw.length) return [clampMidi(rootMidi)];
+    return raw;
   }
 
-  function getHighlightedNotes() {
-    const chord = getActiveChord();
-    if (state.lastNote == null || !chord) return [];
-    return getChordNotes(state.lastNote, chord);
+  function getDisplayedChordNotes() {
+    const root = getRootMidiForDisplay();
+    const chord = getSelectedChord();
+    if (root == null || !chord) return [];
+    return getChordNotes(root, chord);
   }
 
   async function ensureAudio() {
@@ -114,16 +163,14 @@
       state.masterGain.gain.value = state.volume;
       state.masterGain.connect(state.audioContext.destination);
     }
-    if (state.audioContext.state === "suspended") {
-      await state.audioContext.resume();
-    }
+    if (state.audioContext.state === "suspended") await state.audioContext.resume();
     state.masterGain.gain.value = state.volume;
     return state.audioContext;
   }
 
-  async function noteOn(midi, velocity = 100) {
+  async function startVoice(midi, velocity = 100) {
     const ctx = await ensureAudio();
-    if (!ctx || state.voices.has(midi)) return;
+    if (state.voices.has(midi)) return;
 
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
@@ -134,219 +181,262 @@
     osc2.type = "sine";
     osc1.frequency.value = midiToFreq(midi);
     osc2.frequency.value = midiToFreq(midi) * 2;
-    osc2.detune.value = 4;
+    osc2.detune.value = 3;
     filter.type = "lowpass";
-    filter.frequency.value = 5000;
+    filter.frequency.value = 4300;
 
     const now = ctx.currentTime;
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.08, velocity / 160), now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.08, Math.min(0.9, velocity / 150)), now + 0.02);
 
     osc1.connect(filter);
     osc2.connect(filter);
     filter.connect(gain);
     gain.connect(state.masterGain);
 
-    osc1.start();
-    osc2.start();
-
+    osc1.start(now);
+    osc2.start(now);
     state.voices.set(midi, { osc1, osc2, gain });
   }
 
-  function noteOff(midi) {
+  function stopVoice(midi) {
     const ctx = state.audioContext;
     const voice = state.voices.get(midi);
     if (!ctx || !voice) return;
-
     const now = ctx.currentTime;
     voice.gain.gain.cancelScheduledValues(now);
-    voice.gain.gain.setValueAtTime(0.1, now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-    voice.osc1.stop(now + 0.18);
-    voice.osc2.stop(now + 0.18);
+    voice.gain.gain.setValueAtTime(0.08, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    voice.osc1.stop(now + 0.2);
+    voice.osc2.stop(now + 0.2);
     state.voices.delete(midi);
   }
 
-  function stopAllAudio() {
-    Array.from(state.voices.keys()).forEach(noteOff);
+  function stopAllVoices() {
+    [...state.voices.keys()].forEach(stopVoice);
   }
 
   function recordEvent(event) {
     if (!state.isRecording) return;
-    state.recordedEvents.push({
-      ...event,
-      time: performance.now() - state.recordingStart,
-    });
-    updateStats();
+    state.recordedEvents.push({ ...event, time: performance.now() - state.recordingStart });
   }
 
-  async function handleInputNoteOn(midi, velocity = 100, source = "midi") {
-    await noteOn(midi, velocity);
-    state.heldKeys.add(midi);
-    state.lastNote = midi;
+  async function handleNoteOn(midi, velocity = 100, source = "midi") {
+    setRootFromMidi(midi);
+    state.lastPlayedNote = midi;
     state.lastVelocity = velocity;
+    state.heldKeys.add(midi);
+    await startVoice(midi, velocity);
     recordEvent({ type: "on", note: midi, velocity, source });
-    updateUI();
+    render();
   }
 
-  function handleInputNoteOff(midi, source = "midi") {
-    noteOff(midi);
+  function handleNoteOff(midi, source = "midi") {
     state.heldKeys.delete(midi);
+    stopVoice(midi);
     recordEvent({ type: "off", note: midi, source });
-    updateUI();
+    render();
   }
 
-  function createPiano() {
+  function buildRootRow() {
+    NOTE_NAMES.forEach((name, pc) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "chip";
+      button.textContent = name;
+      button.dataset.pc = String(pc);
+      button.addEventListener("click", async () => {
+        setRootFromPitchClass(pc);
+        const root = getRootMidiForDisplay();
+        if (root != null) {
+          await startVoice(root, 100);
+          window.setTimeout(() => stopVoice(root), 260);
+        }
+        render();
+      });
+      els.rootRow.appendChild(button);
+    });
+  }
+
+  function previewChordStart(chordId) {
+    const chord = CHORDS.find((item) => item.id === chordId);
+    const root = getRootMidiForDisplay();
+    if (!chord || root == null) return;
+    state.previewChordId = chordId;
+    const notes = getChordNotes(root, chord);
+    notes.forEach((midi) => startVoice(midi, 92));
+    if (state.previewTimer) clearTimeout(state.previewTimer);
+    state.previewTimer = window.setTimeout(() => previewChordEnd(chordId), state.previewMs);
+    render();
+  }
+
+  function previewChordEnd(chordId) {
+    const activeId = state.previewChordId;
+    if (state.previewTimer) clearTimeout(state.previewTimer);
+    state.previewTimer = null;
+    if (activeId && (!chordId || chordId === activeId)) {
+      const chord = CHORDS.find((item) => item.id === activeId);
+      const root = getRootMidiForDisplay();
+      if (chord && root != null) getChordNotes(root, chord).forEach(stopVoice);
+    }
+    state.previewChordId = null;
+    render();
+  }
+
+  function buildChordGrid() {
+    CHORDS.forEach((chord) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "chord-card";
+      button.dataset.chordId = chord.id;
+      button.innerHTML = `<span class="chord-name">${chord.name}</span><span class="chord-meta">${chord.intervals.map((n) => `+${n}`).join(" ")}</span>`;
+
+      button.addEventListener("click", () => {
+        state.selectedChordId = chord.id;
+        render();
+      });
+
+      const start = (event) => {
+        if (event) event.preventDefault();
+        previewChordStart(chord.id);
+      };
+      const end = () => previewChordEnd(chord.id);
+
+      button.addEventListener("mousedown", start);
+      button.addEventListener("mouseup", end);
+      button.addEventListener("mouseleave", end);
+      button.addEventListener("touchstart", start, { passive: false });
+      button.addEventListener("touchend", end);
+      button.addEventListener("touchcancel", end);
+      els.chordGrid.appendChild(button);
+    });
+  }
+
+  function buildPiano() {
     const whites = [];
     const blacks = [];
     let whiteIndex = 0;
 
     for (let midi = KEYBOARD_START; midi <= KEYBOARD_END; midi += 1) {
-      if (isBlackKey(midi)) {
-        blacks.push({ midi, whiteIndex: whiteIndex - 1 });
-      } else {
+      if (isBlackKey(midi)) blacks.push({ midi, whiteIndex: whiteIndex - 1 });
+      else {
         whites.push({ midi, whiteIndex });
         whiteIndex += 1;
       }
     }
 
     const whiteWidth = PIANO_WIDTH / whiteIndex;
-    const blackWidth = whiteWidth * 0.62;
+    const blackWidth = whiteWidth * 0.63;
 
-    for (const key of whites) {
+    function bindKey(button, midi) {
+      button.dataset.midi = String(midi);
+      button.title = `${noteNameFromMidi(midi)} (${midi})`;
+      button.addEventListener("mousedown", () => handleNoteOn(midi, 100, "mouse"));
+      button.addEventListener("mouseup", () => handleNoteOff(midi, "mouse"));
+      button.addEventListener("mouseleave", () => {
+        if (state.heldKeys.has(midi)) handleNoteOff(midi, "mouse");
+      });
+      button.addEventListener("touchstart", (event) => {
+        event.preventDefault();
+        handleNoteOn(midi, 100, "touch");
+      }, { passive: false });
+      button.addEventListener("touchend", () => handleNoteOff(midi, "touch"));
+      button.addEventListener("touchcancel", () => handleNoteOff(midi, "touch"));
+    }
+
+    whites.forEach((key) => {
       const button = document.createElement("button");
+      button.type = "button";
       button.className = "key white";
       button.style.left = `${key.whiteIndex * whiteWidth}px`;
       button.style.width = `${whiteWidth}px`;
-      button.dataset.midi = String(key.midi);
-      button.innerHTML = `<span class="key-label">${key.midi % 12 === 0 ? noteNameFromMidi(key.midi) : ""}</span>`;
-      bindPianoInteractions(button, key.midi);
+      button.innerHTML = `<span class="key-label">${pitchClass(key.midi) === 0 ? noteNameFromMidi(key.midi) : ""}</span>`;
+      bindKey(button, key.midi);
       els.piano.appendChild(button);
-    }
+    });
 
-    for (const key of blacks) {
+    blacks.forEach((key) => {
       const button = document.createElement("button");
+      button.type = "button";
       button.className = "key black";
       button.style.left = `${(key.whiteIndex + 1) * whiteWidth - blackWidth / 2}px`;
       button.style.width = `${blackWidth}px`;
-      button.dataset.midi = String(key.midi);
-      bindPianoInteractions(button, key.midi);
+      bindKey(button, key.midi);
       els.piano.appendChild(button);
-    }
-  }
-
-  function bindPianoInteractions(button, midi) {
-    button.addEventListener("mousedown", () => handleInputNoteOn(midi, 100, "mouse"));
-    button.addEventListener("mouseup", () => handleInputNoteOff(midi, "mouse"));
-    button.addEventListener("mouseleave", () => {
-      if (state.heldKeys.has(midi)) handleInputNoteOff(midi, "mouse");
     });
-    button.addEventListener("touchstart", (event) => {
-      event.preventDefault();
-      handleInputNoteOn(midi, 100, "touch");
-    }, { passive: false });
-    button.addEventListener("touchend", () => handleInputNoteOff(midi, "touch"));
   }
 
-  function createChordGrid() {
-    PRESET_CHORDS.forEach((chord) => {
-      const button = document.createElement("button");
-      button.className = "chord-btn";
-      button.dataset.chordId = chord.id;
-      button.innerHTML = `
-        <span class="chord-name">${chord.name}</span>
-        <span class="chord-intervals">${chord.intervals.map((n) => `+${n}`).join(" ")}</span>
-      `;
+  function updateRootButtons() {
+    const selectedPc = state.selectedRootPc;
+    els.rootRow.querySelectorAll(".chip").forEach((button) => {
+      button.classList.toggle("active", Number(button.dataset.pc) === selectedPc);
+    });
+  }
 
-      button.addEventListener("click", () => {
-        if (state.lastNote == null) return;
-        state.selectedChordId = chord.id;
-        updateUI();
-      });
-
-      const previewStart = async (event) => {
-        if (state.lastNote == null) return;
-        if (event) event.preventDefault();
-        state.previewChordId = chord.id;
-        const notes = getChordNotes(state.lastNote, chord);
-        notes.forEach((midi) => noteOn(midi, 96));
-        if (state.previewTimeout) clearTimeout(state.previewTimeout);
-        state.previewTimeout = window.setTimeout(() => {
-          notes.forEach(noteOff);
-          state.previewChordId = null;
-          updateUI();
-        }, state.previewMs);
-        updateUI();
-      };
-
-      const previewEnd = () => {
-        const active = state.previewChordId === chord.id ? chord : null;
-        if (active && state.lastNote != null) {
-          getChordNotes(state.lastNote, active).forEach(noteOff);
-        }
-        if (state.previewTimeout) clearTimeout(state.previewTimeout);
-        state.previewChordId = null;
-        updateUI();
-      };
-
-      button.addEventListener("mousedown", previewStart);
-      button.addEventListener("mouseup", previewEnd);
-      button.addEventListener("mouseleave", previewEnd);
-      button.addEventListener("touchstart", previewStart, { passive: false });
-      button.addEventListener("touchend", previewEnd);
-
-      els.chordGrid.appendChild(button);
+  function updateChordButtons() {
+    const selected = state.selectedChordId;
+    const preview = state.previewChordId;
+    const rootAvailable = getRootMidiForDisplay() != null;
+    els.chordGrid.querySelectorAll(".chord-card").forEach((button) => {
+      const id = button.dataset.chordId;
+      button.disabled = !rootAvailable;
+      button.classList.toggle("active", id === selected || id === preview);
     });
   }
 
   function updatePiano() {
-    const highlighted = new Set(getHighlightedNotes());
-    const keys = els.piano.querySelectorAll(".key");
-    keys.forEach((key) => {
-      const midi = Number(key.dataset.midi);
-      key.classList.toggle("pressed", state.heldKeys.has(midi));
-      key.classList.toggle("chord", highlighted.has(midi));
-      key.classList.toggle("root", state.lastNote === midi);
-      key.title = `${noteNameFromMidi(midi)} (${midi})`;
+    const highlighted = new Set(getDisplayedChordNotes());
+    const root = getRootMidiForDisplay();
+    els.piano.querySelectorAll(".key").forEach((button) => {
+      const midi = Number(button.dataset.midi);
+      button.classList.toggle("pressed", state.heldKeys.has(midi));
+      button.classList.toggle("chord", highlighted.has(midi));
+      button.classList.toggle("root", midi === root);
     });
   }
 
-  function updateChordGrid() {
-    const disabled = state.lastNote == null;
-    els.chordGrid.querySelectorAll(".chord-btn").forEach((button) => {
-      const chordId = button.dataset.chordId;
-      button.disabled = disabled;
-      button.classList.toggle("active", chordId === state.selectedChordId || chordId === state.previewChordId);
-    });
+  function updateText() {
+    const root = getRootMidiForDisplay();
+    const chord = getSelectedChord();
+    const chordNotes = getDisplayedChordNotes();
+    const pressed = [...state.heldKeys].sort((a, b) => a - b);
+
+    els.rootValue.textContent = root != null ? noteNameFromMidi(root) : "—";
+    els.rootHelp.textContent = root != null ? `Root pitch class ${pcName(pitchClass(root))}` : "Play or click a note, or choose from the root row.";
+    els.lastNoteValue.textContent = state.lastPlayedNote != null ? noteNameFromMidi(state.lastPlayedNote) : "—";
+    els.lastMidiValue.textContent = `MIDI ${state.lastPlayedNote != null ? state.lastPlayedNote : "—"}${state.lastPlayedNote != null ? ` • velocity ${state.lastVelocity}` : ""}`;
+    els.selectedChordValue.textContent = root != null && chord ? `${pcName(pitchClass(root))} ${chord.name}` : "—";
+    els.selectedChordNotes.textContent = chordNotes.length ? chordNotes.map(noteNameFromMidi).join(" · ") : "Choose a root and chord type.";
+    els.recordingValue.textContent = state.isRecording ? "Recording" : "Idle";
+    els.eventCountValue.textContent = `${state.recordedEvents.length} events captured`;
+    els.volumeValue.textContent = `${Math.round(state.volume * 100)}%`;
+    els.previewMsValue.textContent = `${state.previewMs} ms`;
+    els.pressedNotesText.textContent = pressed.length ? pressed.map(noteNameFromMidi).join(" · ") : "None";
+    els.chordNotesText.textContent = chordNotes.length ? chordNotes.map((m) => `${noteNameFromMidi(m)} (${m})`).join(" · ") : "None";
+    els.midiDeviceText.textContent = state.midiInputNames.length ? state.midiInputNames.join(", ") : "Browser / mouse / touch";
+    els.pianoSummary.textContent = root != null && chord ? `Blue = currently pressed notes, red = ${pcName(pitchClass(root))} ${chord.name}, soft white ring = selected root.` : "Blue = currently pressed notes, red = chord shape, soft white ring = selected root.";
+    els.recordBtn.textContent = state.isRecording ? "Recording…" : "Record";
+    els.stopBtn.disabled = !state.isRecording;
+    els.saveMidiBtn.disabled = !state.recordedEvents.length;
+    els.saveWavBtn.disabled = !state.recordedEvents.length;
   }
 
-  function updateStats() {
-    els.lastNote.textContent = state.lastNote != null ? noteNameFromMidi(state.lastNote) : "—";
-    els.lastMidi.textContent = `MIDI ${state.lastNote != null ? state.lastNote : "—"}`;
-    els.lastVelocity.textContent = state.lastVelocity || "—";
-    els.inputName.textContent = state.midiInputs[0]?.name || "Browser / mouse";
-    els.eventCount.textContent = `${state.recordedEvents.length} events captured`;
-    const activeChord = getActiveChord();
-    els.selectedChordLabel.textContent = state.lastNote != null && activeChord ? `${pitchClassName(state.lastNote)} ${activeChord.name}` : "—";
-    els.recordingBadge.textContent = state.isRecording ? "Recording" : "Idle";
-    els.noteSummary.textContent = state.lastNote != null ? `Showing ${noteNameFromMidi(state.lastNote)} and related chord shapes` : "Waiting for input";
-  }
-
-  function updateUI() {
+  function render() {
+    updateRootButtons();
+    updateChordButtons();
     updatePiano();
-    updateChordGrid();
-    updateStats();
+    updateText();
   }
 
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1200);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1200);
   }
 
   function encodeVariableLength(value) {
@@ -377,16 +467,14 @@
     return out;
   }
 
-  function createMidiFile(recordedEvents) {
+  function createMidiFile(events) {
     const ticksPerQuarter = 480;
     const tempo = 500000;
     const msPerTick = tempo / 1000 / ticksPerQuarter;
-    const sorted = [...recordedEvents].sort((a, b) => a.time - b.time);
+    const sorted = [...events].sort((a, b) => a.time - b.time);
     const track = [];
     let lastTick = 0;
-
     track.push(...encodeVariableLength(0), 0xff, 0x51, 0x03, ...numBytes(tempo, 3));
-
     sorted.forEach((event) => {
       const tick = Math.max(0, Math.round(event.time / msPerTick));
       const delta = tick - lastTick;
@@ -395,9 +483,7 @@
       const velocity = event.type === "on" ? Math.max(1, Math.min(127, event.velocity || 100)) : 0;
       track.push(...encodeVariableLength(delta), status, event.note, velocity);
     });
-
     track.push(...encodeVariableLength(0), 0xff, 0x2f, 0x00);
-
     return new Uint8Array([
       ...strBytes("MThd"),
       ...numBytes(6, 4),
@@ -449,18 +535,19 @@
         offset += 2;
       }
     }
+
     return new Blob([buffer], { type: "audio/wav" });
   }
 
-  async function renderRecordingToWav(recordedEvents) {
-    if (!recordedEvents.length) throw new Error("No recording available.");
-    const sorted = [...recordedEvents].sort((a, b) => a.time - b.time);
-    const durationMs = Math.max(2000, sorted[sorted.length - 1].time + 2000);
+  async function renderRecordingToWav(events) {
+    if (!events.length) throw new Error("No recording available.");
+    const sorted = [...events].sort((a, b) => a.time - b.time);
+    const durationMs = Math.max(2200, sorted[sorted.length - 1].time + 2000);
     const sampleRate = 44100;
     const frameCount = Math.ceil((durationMs / 1000) * sampleRate);
     const context = new OfflineAudioContext(2, frameCount, sampleRate);
     const master = context.createGain();
-    master.gain.value = 0.92;
+    master.gain.value = 0.96;
     master.connect(context.destination);
     const active = new Map();
 
@@ -475,11 +562,11 @@
         osc2.type = "sine";
         osc1.frequency.setValueAtTime(midiToFreq(event.note), t);
         osc2.frequency.setValueAtTime(midiToFreq(event.note) * 2, t);
-        osc2.detune.value = 4;
+        osc2.detune.value = 3;
         filter.type = "lowpass";
-        filter.frequency.value = 5000;
+        filter.frequency.value = 4300;
         gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.exponentialRampToValueAtTime((event.velocity || 100) / 180, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.08, Math.min(0.9, (event.velocity || 100) / 150)), t + 0.02);
         osc1.connect(filter);
         osc2.connect(filter);
         filter.connect(gain);
@@ -491,7 +578,7 @@
         const voice = active.get(event.note);
         if (!voice) return;
         voice.gain.gain.cancelScheduledValues(t);
-        voice.gain.gain.setValueAtTime(0.1, t);
+        voice.gain.gain.setValueAtTime(0.08, t);
         voice.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
         voice.osc1.stop(t + 0.2);
         voice.osc2.stop(t + 0.2);
@@ -507,55 +594,52 @@
       voice.osc2.stop(endTime);
     });
 
-    const rendered = await context.startRendering();
-    return audioBufferToWav(rendered);
+    return audioBufferToWav(await context.startRendering());
   }
 
   async function setupMIDI() {
     if (!navigator.requestMIDIAccess) {
-      els.midiStatus.textContent = "Web MIDI unavailable";
-      els.browserStatus.textContent = "Use Chrome or Edge desktop for MIDI";
+      els.browserStatus.textContent = "Web MIDI is not available in this browser";
+      els.midiStatus.textContent = "Use Chrome or Edge on desktop for hardware MIDI";
+      render();
       return;
     }
 
+    els.browserStatus.textContent = "Web MIDI available";
     try {
       state.midiAccess = await navigator.requestMIDIAccess();
-      bindMidiInputs();
-      state.midiAccess.onstatechange = bindMidiInputs;
+      const bindInputs = () => {
+        const inputs = [...state.midiAccess.inputs.values()];
+        state.midiInputNames = inputs.map((input) => input.name || "Unnamed MIDI device");
+        els.midiStatus.textContent = inputs.length ? `Connected to ${inputs.length} MIDI input${inputs.length > 1 ? "s" : ""}` : "MIDI enabled — connect a keyboard and press a note";
+        inputs.forEach((input) => {
+          input.onmidimessage = (event) => {
+            const [status, note, velocity = 0] = event.data;
+            const command = status & 0xf0;
+            if (command === 0x90 && velocity > 0) handleNoteOn(note, velocity, "midi");
+            else if (command === 0x80 || (command === 0x90 && velocity === 0)) handleNoteOff(note, "midi");
+          };
+        });
+        render();
+      };
+      bindInputs();
+      state.midiAccess.onstatechange = bindInputs;
     } catch (error) {
-      els.midiStatus.textContent = "MIDI access denied";
-      els.browserStatus.textContent = error.message;
+      els.midiStatus.textContent = `MIDI access failed: ${error.message}`;
+      render();
     }
   }
 
-  function bindMidiInputs() {
-    const inputs = [...state.midiAccess.inputs.values()];
-    state.midiInputs = inputs;
-    els.midiStatus.textContent = inputs.length ? `${inputs.length} MIDI input${inputs.length > 1 ? "s" : ""} connected` : "MIDI enabled, no device connected yet";
-    els.browserStatus.textContent = "Static GitHub Pages app";
-
-    inputs.forEach((input) => {
-      input.onmidimessage = (event) => {
-        const [status, data1, data2] = event.data;
-        const command = status & 0xf0;
-        const note = data1;
-        const velocity = data2 || 0;
-        if (command === 0x90 && velocity > 0) handleInputNoteOn(note, velocity, "midi");
-        else if (command === 0x80 || (command === 0x90 && velocity === 0)) handleInputNoteOff(note, "midi");
-      };
-    });
-
-    updateStats();
-  }
-
-  function wireControls() {
+  function bindControls() {
     els.volumeSlider.addEventListener("input", () => {
       state.volume = Number(els.volumeSlider.value);
       if (state.masterGain) state.masterGain.gain.value = state.volume;
+      render();
     });
 
     els.previewMsSlider.addEventListener("input", () => {
       state.previewMs = Number(els.previewMsSlider.value);
+      render();
     });
 
     els.recordBtn.addEventListener("click", async () => {
@@ -563,36 +647,103 @@
       state.recordedEvents = [];
       state.recordingStart = performance.now();
       state.isRecording = true;
-      updateUI();
+      render();
     });
 
     els.stopBtn.addEventListener("click", () => {
       state.isRecording = false;
-      updateUI();
+      render();
     });
 
     els.saveMidiBtn.addEventListener("click", () => {
       if (!state.recordedEvents.length) return;
-      const midiBytes = createMidiFile(state.recordedEvents);
-      downloadBlob(new Blob([midiBytes], { type: "audio/midi" }), `ius-midi-chord-piano-${Date.now()}.mid`);
+      downloadBlob(new Blob([createMidiFile(state.recordedEvents)], { type: "audio/midi" }), `ius-midi-chord-piano-${Date.now()}.mid`);
     });
 
     els.saveWavBtn.addEventListener("click", async () => {
       if (!state.recordedEvents.length) return;
-      els.browserStatus.textContent = "Rendering WAV…";
-      const wavBlob = await renderRecordingToWav(state.recordedEvents);
-      downloadBlob(wavBlob, `ius-midi-chord-piano-${Date.now()}.wav`);
-      els.browserStatus.textContent = "Static GitHub Pages app";
+      els.saveWavBtn.disabled = true;
+      const old = els.saveWavBtn.textContent;
+      els.saveWavBtn.textContent = "Rendering WAV…";
+      try {
+        const wav = await renderRecordingToWav(state.recordedEvents);
+        downloadBlob(wav, `ius-midi-chord-piano-${Date.now()}.wav`);
+      } finally {
+        els.saveWavBtn.textContent = old;
+        els.saveWavBtn.disabled = false;
+        render();
+      }
     });
   }
 
+  function exposeForTests() {
+    window.IUSChordPiano = {
+      state,
+      setRootFromPitchClass,
+      previewChordStart,
+      previewChordEnd,
+      getDisplayedChordNotes,
+      getSelectedChord,
+      handleNoteOn,
+      handleNoteOff,
+      render,
+      noteNameFromMidi,
+      createMidiFile,
+    };
+  }
+
+
+  async function maybeRunSelfTest() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("selftest") !== "1") return;
+    const results = [];
+    try {
+      setRootFromPitchClass(0);
+      render();
+      results.push(state.selectedRootPc === 0 ? "root-select:ok" : "root-select:fail");
+
+      state.selectedChordId = "maj7";
+      render();
+      const notes = getDisplayedChordNotes().map(noteNameFromMidi).join(",");
+      results.push(notes.includes("C4") && notes.includes("E4") && notes.includes("G4") && notes.includes("B4") ? "chord-notes:ok" : `chord-notes:fail:${notes}`);
+
+      await handleNoteOn(62, 100, "selftest");
+      const pressedAfterOn = state.heldKeys.has(62);
+      handleNoteOff(62, "selftest");
+      const pressedAfterOff = state.heldKeys.has(62);
+      results.push(pressedAfterOn && !pressedAfterOff ? "note-io:ok" : "note-io:fail");
+
+      state.recordedEvents = [
+        { type: "on", note: 60, velocity: 100, time: 0 },
+        { type: "off", note: 60, time: 400 },
+      ];
+      const midiBytes = createMidiFile(state.recordedEvents);
+      results.push(midiBytes.length > 20 ? "midi-export:ok" : "midi-export:fail");
+
+      const ok = results.every((item) => item.endsWith(":ok"));
+      document.body.setAttribute("data-selftest", ok ? "pass" : "fail");
+      const marker = document.createElement("pre");
+      marker.id = "selftest-results";
+      marker.textContent = results.join("\n");
+      document.body.appendChild(marker);
+    } catch (error) {
+      document.body.setAttribute("data-selftest", "fail");
+      const marker = document.createElement("pre");
+      marker.id = "selftest-results";
+      marker.textContent = `error:${error.message}`;
+      document.body.appendChild(marker);
+    }
+  }
+
   function init() {
-    createPiano();
-    createChordGrid();
-    wireControls();
-    updateUI();
+    buildRootRow();
+    buildChordGrid();
+    buildPiano();
+    bindControls();
+    exposeForTests();
+    render();
     setupMIDI();
-    window.addEventListener("beforeunload", stopAllAudio);
+    maybeRunSelfTest();
   }
 
   init();

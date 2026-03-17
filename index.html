@@ -1,131 +1,122 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>I/US MIDI Chord Piano</title>
-  <meta name="description" content="I/US MIDI Chord Piano: MIDI keyboard chord explorer with recording, MIDI export, and WAV export." />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta name="description" content="Static MIDI chord piano for GitHub Pages with full 88-key layout, root and chord selection, chord preview, recording, MIDI export, and WAV export." />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="shell">
-    <header class="topbar panel">
+  <div class="app-shell">
+    <header class="topbar">
       <div class="brand">
-        <img src="assets/logo.png" alt="I/US official logo" class="logo" />
-        <div class="brand-copy">
-          <div class="kicker">I/US Music</div>
-          <h1>MIDI Chord Piano</h1>
-          <p class="hero-copy">
-            Explore root-note chord shapes from your MIDI keyboard, preview them on a full piano, and export recordings as MIDI or WAV.
-          </p>
+        <img src="assets/logo.png" alt="I/US Music logo" class="brand-logo" />
+        <div>
+          <div class="eyebrow">I/US Music</div>
+          <h1>I/US MIDI Chord Piano</h1>
+          <p class="subtitle">Full piano layout, MIDI input, root + chord selection, chord preview, recording, MIDI export, and WAV export.</p>
         </div>
       </div>
-      <div class="topbar-controls">
-        <div class="status" id="midiStatus">Checking MIDI support…</div>
-        <div class="status" id="browserStatus">Static GitHub Pages app</div>
+      <div class="status-stack">
+        <div class="status-pill" id="browserStatus">Checking browser support…</div>
+        <div class="status-pill" id="midiStatus">Checking MIDI…</div>
       </div>
     </header>
 
-    <main class="workspace">
-      <aside class="sidebar">
-        <section class="panel">
-          <div class="section-head">
-            <h2>Session</h2>
-            <div class="status" id="recordingBadge">Idle</div>
-          </div>
-          <div class="stats-grid">
-            <div class="stat-card">
-              <span>Last note</span>
-              <strong id="lastNote">—</strong>
-              <small id="lastMidi">MIDI —</small>
-            </div>
-            <div class="stat-card">
-              <span>Velocity</span>
-              <strong id="lastVelocity">—</strong>
-              <small>From MIDI or click</small>
-            </div>
-            <div class="stat-card">
-              <span>Selected chord</span>
-              <strong id="selectedChordLabel">—</strong>
-              <small>Tap to latch, hold to preview</small>
-            </div>
-            <div class="stat-card">
-              <span>Input</span>
-              <strong id="inputName">—</strong>
-              <small id="eventCount">0 events captured</small>
-            </div>
-          </div>
+    <main class="main-grid">
+      <section class="panel hero-panel">
+        <div class="stats-grid">
+          <article class="stat-card">
+            <span class="stat-label">Current root</span>
+            <strong class="stat-value" id="rootValue">—</strong>
+            <span class="stat-help" id="rootHelp">Play or click a note, or choose from the root row.</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Last played note</span>
+            <strong class="stat-value" id="lastNoteValue">—</strong>
+            <span class="stat-help" id="lastMidiValue">MIDI —</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Selected chord</span>
+            <strong class="stat-value" id="selectedChordValue">—</strong>
+            <span class="stat-help" id="selectedChordNotes">Choose a chord type below.</span>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Recording</span>
+            <strong class="stat-value" id="recordingValue">Idle</strong>
+            <span class="stat-help" id="eventCountValue">0 events captured</span>
+          </article>
+        </div>
 
-          <div class="subpanel">
-            <div class="small-head">
-              <h3>Controls</h3>
-            </div>
-            <div class="controls-grid">
-              <label>
-                <span>Output volume</span>
-                <input id="volumeSlider" type="range" min="0.05" max="1" step="0.01" value="0.6" />
-              </label>
-              <label>
-                <span>Preview hold (ms)</span>
-                <input id="previewMsSlider" type="range" min="300" max="2500" step="50" value="1200" />
-              </label>
-            </div>
-            <div class="button-row top-gap">
-              <button class="btn btn-solid" id="recordBtn">Record</button>
-              <button class="btn" id="stopBtn">Stop</button>
-            </div>
-            <div class="button-row top-gap">
-              <button class="btn" id="saveMidiBtn">Save MIDI</button>
-              <button class="btn" id="saveWavBtn">Save WAV</button>
-            </div>
+        <div class="control-cluster">
+          <div class="control-group">
+            <label for="volumeSlider">Output volume</label>
+            <input id="volumeSlider" type="range" min="0.05" max="1" step="0.01" value="0.65" />
+            <span id="volumeValue">65%</span>
           </div>
+          <div class="control-group">
+            <label for="previewMsSlider">Chord preview length</label>
+            <input id="previewMsSlider" type="range" min="250" max="3000" step="50" value="1200" />
+            <span id="previewMsValue">1200 ms</span>
+          </div>
+        </div>
 
-          <div class="subpanel">
-            <div class="small-head">
-              <h3>Chord Shapes</h3>
-            </div>
-            <p class="panel-copy">
-              Play a note on your MIDI keyboard first. Tap a chord name to keep it selected. Press and hold a chord name to preview the sound and highlight its shape.
-            </p>
-            <div id="chordGrid" class="chord-grid"></div>
-          </div>
-        </section>
-      </aside>
+        <div class="section-head">
+          <h2>Recording and export</h2>
+          <p>Records MIDI note input from hardware MIDI, mouse, or touch. Export directly in the browser as <code>.mid</code> and rendered <code>.wav</code>.</p>
+        </div>
+        <div class="button-row">
+          <button id="recordBtn" class="action primary">Record</button>
+          <button id="stopBtn" class="action">Stop</button>
+          <button id="saveMidiBtn" class="action">Save MIDI</button>
+          <button id="saveWavBtn" class="action">Save WAV</button>
+        </div>
+      </section>
 
-      <section class="content">
-        <section class="panel">
-          <div class="section-head">
-            <h2>Full Piano Layout</h2>
-            <div class="status" id="noteSummary">Waiting for input</div>
-          </div>
-          <div class="legend-row">
-            <span><i class="swatch swatch-pressed"></i> pressed</span>
-            <span><i class="swatch swatch-chord"></i> chord shape</span>
-            <span><i class="swatch swatch-root"></i> root</span>
-          </div>
-          <div class="piano-scroll">
-            <div id="piano" class="piano"></div>
-          </div>
-        </section>
+      <section class="panel piano-panel">
+        <div class="section-head tight">
+          <h2>Full piano layout</h2>
+          <p id="pianoSummary">Blue = currently pressed notes, red = chord shape, soft white ring = selected root.</p>
+        </div>
 
-        <section class="panel">
-          <div class="section-head">
-            <h2>Deployment Notes</h2>
+        <div class="legend-row">
+          <span><i class="legend swatch pressed"></i>Pressed</span>
+          <span><i class="legend swatch chord"></i>Chord shape</span>
+          <span><i class="legend swatch root"></i>Root</span>
+        </div>
+
+        <div class="piano-scroll">
+          <div id="piano" class="piano" aria-label="Full piano keyboard"></div>
+        </div>
+        <div class="chooser-stack">
+          <div class="section-head compact">
+            <h2>Choose root</h2>
+            <p>Play or click any note to set the root automatically, or choose it directly here.</p>
           </div>
-          <div class="notes-grid">
-            <div class="note-card">
-              <h3>GitHub Pages Ready</h3>
-              <p>This build is static. Upload the repository contents as-is and deploy with GitHub Pages from the main branch root.</p>
-            </div>
-            <div class="note-card">
-              <h3>Browser Support</h3>
-              <p>Web MIDI works best in Chrome and Edge on desktop. The site still loads elsewhere, but external MIDI support varies by browser.</p>
-            </div>
+          <div class="chip-row under-piano" id="rootRow" aria-label="Root note chooser"></div>
+
+          <div class="section-head compact">
+            <h2>Choose chord type</h2>
+            <p>Tap once to select. Press and hold to preview the shape and hear it while the keys stay highlighted.</p>
           </div>
-        </section>
+          <div class="chip-grid under-piano" id="chordGrid" aria-label="Chord type chooser"></div>
+        </div>
+
+        <div class="details-grid">
+          <article class="detail-card">
+            <h3>Pressed keys</h3>
+            <div id="pressedNotesText">None</div>
+          </article>
+          <article class="detail-card">
+            <h3>Chord shape notes</h3>
+            <div id="chordNotesText">None</div>
+          </article>
+          <article class="detail-card">
+            <h3>MIDI device</h3>
+            <div id="midiDeviceText">Waiting for device…</div>
+          </article>
+        </div>
       </section>
     </main>
   </div>
