@@ -4,7 +4,7 @@ Web Preview: https://iusmusic.github.io/PianoCompanion/
 
 ## Overview
 
-I/US MIDI Chord Piano is a self-contained browser app for MIDI note input, chord-shape exploration, piano visualization, note detail display, and lightweight recording/export.
+I/US Piano Companion is a self-contained browser app for MIDI note input, chord-shape exploration, piano visualization, note detail display, and lightweight recording/export.
 
 It runs with no backend and no build step. The app uses the Web Audio API for playback, supports Web MIDI input in compatible browsers, and is ready for static hosting on GitHub Pages.
 
@@ -56,14 +56,48 @@ The app uses the Web MIDI API for connected MIDI devices in supported browsers. 
 - The site is static and can be deployed directly to GitHub Pages.
 - If a browser does not support Web MIDI, the app still loads and the on-screen keyboard remains usable.
 
-## Files
 
-- `index.html` – app shell and layout
-- `style.css` – I/US-inspired styling and responsive layout
-- `app.js` – MIDI, audio, piano rendering, chord logic, recording, and export
-- `assets/logo.png` – official logo used in the header
+## License
+
+## License
+
+This repository is licensed under the **Mozilla Public License 2.0 (MPL-2.0)**.
+
+This means:
+
+* You may use, modify, and distribute this software
+
+* You may create and sell real products and apps based on this code
+
+* If you distribute modified versions of MPL-covered files, those modified files must remain available under the **MPL-2.0**
+
+* The license applies to the code and covered source files in this repository
+
+A full copy of the license should be included in the repository as `LICENSE`.
+
+
+## Trademark and brand notice
+
+**I/US**, **IUS**, and **IUS Music** are protected brand identifiers associated with the official I/US project.
+
+The source code in this repository is licensed under the **Mozilla Public License 2.0**.  
+That license applies to the code only.
+
+The **MPL-2.0 does not grant any right to use the I/US name, the IUS name, the IUS Music name, the official logo, the visual identity, artwork, images, audio branding, or other protected brand assets** unless explicit written permission is given by **IUS Music**.
+
+All rights in the **I/US**, **IUS**, and **IUS Music** brand identity are reserved.
+
+Any fork, modified build, redistributed version, or commercial version must not imply official affiliation with or endorsement by the official **I/US** project unless written permission is given.
 
 
 ## License
 
-This project includes the I/US-style source-available license text in LICENSE.
+This repository is released under the **I/US Music Source-Available License 1.0**.
+
+You may view the code, study it, and use it for private internal evaluation.
+
+You may not sell it, redistribute it, sublicense it, publish modified versions of it, or use it commercially without prior written permission from **PEZHMAN FARHANGI** **I/US Music**.
+
+If this repository is public on GitHub, GitHub users may still have limited rights to view and fork it through GitHub’s own platform functions, as required by GitHub’s Terms of Service.
+
+See `LICENSE.md` and `TRADEMARKS.md` for full terms.
