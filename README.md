@@ -1,8 +1,9 @@
 # I/US Music Piano Companion Demo
 
 Web Preview: https://iusmusic.github.io/PianoCompanion/
-
 ![0Preview](PIANOCompanionDEMO.png)
+
+![0Preview](PIANOCompanionDEMO1.png)
 
 
 ## Overview
