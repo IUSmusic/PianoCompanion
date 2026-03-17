@@ -1,8 +1,6 @@
 # I/US MIDI Chord Piano
 
-Web preview (after GitHub Pages deployment):
 
-`https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPOSITORY_NAME/`
 
 ## Overview
 
@@ -79,6 +77,4 @@ Once GitHub Pages finishes publishing, your app will be live.
 
 ## License
 
-Licensed under the Apache License, Version 2.0.
-
-See `LICENSE` for the full license text.
+This project includes the I/US-style source-available license text in LICENSE.
