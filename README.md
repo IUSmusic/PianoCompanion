@@ -2,7 +2,7 @@
 
 Web Preview: https://iusmusic.github.io/PianoCompanion/
 
-![Preview](PIANOCompanionDEMOpng)
+![0Preview](PIANOCompanionDEMO.png)
 
 
 ## Overview
