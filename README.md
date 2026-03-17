@@ -63,17 +63,6 @@ The app uses the Web MIDI API for connected MIDI devices in supported browsers. 
 - `app.js` – MIDI, audio, piano rendering, chord logic, recording, and export
 - `assets/logo.png` – official logo used in the header
 
-## Deploying to GitHub Pages
-
-1. Create a GitHub repository.
-2. Upload all files from this project.
-3. Commit to the `main` branch.
-4. In GitHub, open **Settings → Pages**.
-5. Under **Build and deployment**, choose **Deploy from a branch**.
-6. Select the `main` branch and the `/ (root)` folder.
-7. Save.
-
-Once GitHub Pages finishes publishing, your app will be live.
 
 ## License
 
