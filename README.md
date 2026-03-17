@@ -1,4 +1,4 @@
-# I/US MIDI Chord Piano
+# I/US Music Piano Companion Demo
 
 Web Preview: https://iusmusic.github.io/PianoCompanion/
 
