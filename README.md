@@ -63,37 +63,11 @@ The app uses the Web MIDI API for connected MIDI devices in supported browsers. 
 - If a browser does not support Web MIDI, the app still loads and the on-screen keyboard remains usable.
 
 
-## License
-
-## License
-
-This repository is licensed under the **Mozilla Public License 2.0 (MPL-2.0)**.
-
-This means:
-
-* You may use, modify, and distribute this software
-
-* You may create and sell real products and apps based on this code
-
-* If you distribute modified versions of MPL-covered files, those modified files must remain available under the **MPL-2.0**
-
-* The license applies to the code and covered source files in this repository
-
-A full copy of the license should be included in the repository as `LICENSE`.
-
-
 ## Trademark and brand notice
 
 **I/US**, **IUS**, and **IUS Music** are protected brand identifiers associated with the official I/US project.
 
-The source code in this repository is licensed under the **Mozilla Public License 2.0**.  
-That license applies to the code only.
-
-The **MPL-2.0 does not grant any right to use the I/US name, the IUS name, the IUS Music name, the official logo, the visual identity, artwork, images, audio branding, or other protected brand assets** unless explicit written permission is given by **IUS Music**.
-
 All rights in the **I/US**, **IUS**, and **IUS Music** brand identity are reserved.
-
-Any fork, modified build, redistributed version, or commercial version must not imply official affiliation with or endorsement by the official **I/US** project unless written permission is given.
 
 
 ## License
