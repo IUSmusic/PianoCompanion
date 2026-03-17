@@ -2,6 +2,9 @@
 
 Web Preview: https://iusmusic.github.io/PianoCompanion/
 
+![Preview](PIANOCompanionDEMOpng)
+
+
 ## Overview
 
 I/US Piano Companion is a self-contained browser app for MIDI note input, chord-shape exploration, piano visualization, note detail display, and lightweight recording/export.
