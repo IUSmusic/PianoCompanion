@@ -1,3 +1,8 @@
+<a href="LICENSE">
+  <img src="images/license-badge.png" alt="License badge" width="70">
+</a>
+
+
 # I/US Music Piano Companion Demo
 
 Web Preview: https://iusmusic.github.io/PianoCompanion/
@@ -81,3 +86,8 @@ You may not sell it, redistribute it, sublicense it, publish modified versions o
 If this repository is public on GitHub, GitHub users may still have limited rights to view and fork it through GitHub’s own platform functions, as required by GitHub’s Terms of Service.
 
 See `LICENSE.md` and `TRADEMARKS.md` for full terms.
+
+
+<a href="LICENSE">
+  <img src="images/license-badge.png" alt="License badge" width="70">
+</a>
